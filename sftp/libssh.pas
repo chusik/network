@@ -34,6 +34,28 @@ const
   _LIBSSH2_SFTP_OPENFILE                        = 0;
   _LIBSSH2_SFTP_OPENDIR                         = 1;
 
+  //* Flags for rename_ex() */
+  LIBSSH2_SFTP_RENAME_OVERWRITE                 = $00000001;
+  LIBSSH2_SFTP_RENAME_ATOMIC                    = $00000002;
+  LIBSSH2_SFTP_RENAME_NATIVE                    = $00000004;
+
+  //* File mode */
+  //* Read, write, execute/search by owner */
+  LIBSSH2_SFTP_S_IRWXU        = 448;     //* RWX mask for owner */
+  LIBSSH2_SFTP_S_IRUSR        = 256;     //* R for owner */
+  LIBSSH2_SFTP_S_IWUSR        = 128;     //* W for owner */
+  LIBSSH2_SFTP_S_IXUSR        = 64;      //* X for owner */
+  //* Read, write, execute/search by group */
+  LIBSSH2_SFTP_S_IRWXG        = 56;      //* RWX mask for group */
+  LIBSSH2_SFTP_S_IRGRP        = 32;      //* R for group */
+  LIBSSH2_SFTP_S_IWGRP        = 16;      //* W for group */
+  LIBSSH2_SFTP_S_IXGRP        = 8;       //* X for group */
+  //* Read, write, execute/search by others */
+  LIBSSH2_SFTP_S_IRWXO        = 7;       //* RWX mask for other */
+  LIBSSH2_SFTP_S_IROTH        = 4;       //* R for other */
+  LIBSSH2_SFTP_S_IWOTH        = 2;       //* W for other */
+  LIBSSH2_SFTP_S_IXOTH        = 1;       //* X for other */
+
 type
   //* Session API */
   PLIBSSH2_SESSION = type Pointer;
@@ -91,7 +113,24 @@ var
                                      longentry: PAnsiChar; longentry_maxlen: csize_t;
                                      attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; cdecl;
   libssh2_sftp_close_handle: function(handle: PLIBSSH2_SFTP_HANDLE): cint; cdecl;
+  //* Miscellaneous Ops */
+  libssh2_sftp_rename_ex: function(sftp: PLIBSSH2_SFTP;
+                                   const source_filename: PAnsiChar;
+                                   srouce_filename_len: cuint;
+                                   const dest_filename: PAnsiChar;
+                                   dest_filename_len: cuint;
+                                   flags: clong): cint; cdecl;
+  libssh2_sftp_unlink_ex: function(sftp: PLIBSSH2_SFTP;
+                                   const filename: PAnsiChar;
+                                   filename_len: cuint): cint; cdecl;
+  libssh2_sftp_mkdir_ex: function(sftp: PLIBSSH2_SFTP;
+                                  const path: PAnsiChar;
+                                  path_len: cuint; mode: clong): cint; cdecl;
+  libssh2_sftp_rmdir_ex: function(sftp: PLIBSSH2_SFTP;
+                                  const path: PAnsiChar;
+                                  path_len: cuint): cint; cdecl;
 
+  //* Inline functions */
   function libssh2_session_init: PLIBSSH2_SESSION; inline;
   function libssh2_session_disconnect(session: PLIBSSH2_SESSION; const description: PAnsiChar): cint; inline;
   function libssh2_userauth_password(session: PLIBSSH2_SESSION; const username: PAnsiChar; const password: PAnsiChar): cint; inline;
@@ -99,6 +138,10 @@ var
   function libssh2_sftp_opendir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar): PLIBSSH2_SFTP_HANDLE; inline;
   function libssh2_sftp_close(handle: PLIBSSH2_SFTP_HANDLE): cint; inline;
   function libssh2_sftp_closedir(handle: PLIBSSH2_SFTP_HANDLE): cint; inline;
+  function libssh2_sftp_rename(sftp: PLIBSSH2_SFTP; const sourcefile: PAnsiChar; const destfile: PAnsiChar): cint; inline;
+  function libssh2_sftp_unlink(sftp: PLIBSSH2_SFTP; const filename: PAnsiChar): cint; inline;
+  function libssh2_sftp_mkdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; mode: clong): cint; inline;
+  function libssh2_sftp_rmdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar): cint; inline;
 
 implementation
 
@@ -139,6 +182,30 @@ end;
 function libssh2_sftp_closedir(handle: PLIBSSH2_SFTP_HANDLE): cint;
 begin
   Result:= libssh2_sftp_close_handle(handle);
+end;
+
+function libssh2_sftp_rename(sftp: PLIBSSH2_SFTP; const sourcefile: PAnsiChar; const destfile: PAnsiChar): cint;
+begin
+  Result:= libssh2_sftp_rename_ex(sftp, sourcefile, strlen(sourcefile),
+                                  destfile, strlen(destfile),
+                                  LIBSSH2_SFTP_RENAME_OVERWRITE or
+                                  LIBSSH2_SFTP_RENAME_ATOMIC or
+                                  LIBSSH2_SFTP_RENAME_NATIVE);
+end;
+
+function libssh2_sftp_unlink(sftp: PLIBSSH2_SFTP; const filename: PAnsiChar): cint;
+begin
+  Result:= libssh2_sftp_unlink_ex(sftp, filename, strlen(filename));
+end;
+
+function libssh2_sftp_mkdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; mode: clong): cint;
+begin
+  Result:= libssh2_sftp_mkdir_ex(sftp, path, strlen(path), mode);
+end;
+
+function libssh2_sftp_rmdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar): cint;
+begin
+  Result:= libssh2_sftp_rmdir_ex(sftp, path, strlen(path));
 end;
 
 end.
