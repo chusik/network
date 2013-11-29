@@ -46,6 +46,8 @@ type
     // Retrieve some properties of the file source.
     function GetProperties: TFileSourceProperties; override;
 
+    function GetFreeSpace(Path: String; out FreeSize, TotalSize : Int64) : Boolean; override;
+
     // These functions create an operation object specific to the file source.
     function CreateListOperation(TargetPath: String): TFileSourceOperation; override;
     function CreateCopyInOperation(SourceFileSource: IFileSource;
@@ -207,6 +209,26 @@ end;
 function TSftpFileSource.GetProperties: TFileSourceProperties;
 begin
   Result := [fspUsesConnections, fspListInMainThread];
+end;
+
+function TSftpFileSource.GetFreeSpace(Path: String; out FreeSize,
+  TotalSize: Int64): Boolean;
+var
+  Ret: Integer;
+  RemotePath: UTF8String;
+  Stat: _LIBSSH2_SFTP_STATVFS;
+begin
+  RemotePath:= CreateNetworkPath(Path);
+  repeat
+    Ret:= libssh2_sftp_statvfs((FMainConnection as TSftpFileSourceConnection).Session_,
+                               PAnsiChar(RemotePath), Length(RemotePath), @Stat);
+  until Ret <> LIBSSH2_ERROR_EAGAIN;
+  Result:= (Ret = 0);
+  if Result then
+  begin
+    FreeSize:= (Int64(Stat.f_bavail) * Stat.f_bsize);
+    TotalSize:= (Int64(Stat.f_blocks) * Stat.f_bsize);
+  end;
 end;
 
 function TSftpFileSource.GetSupportedFileProperties: TFilePropertiesTypes;

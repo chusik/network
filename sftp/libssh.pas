@@ -140,6 +140,20 @@ type
     permissions: culong;
     atime, mtime: culong;
   end;
+  PLIBSSH2_SFTP_STATVFS = ^_LIBSSH2_SFTP_STATVFS;
+  _LIBSSH2_SFTP_STATVFS = record
+      f_bsize: cuint64;    //* file system block size */
+      f_frsize: cuint64;   //* fragment size */
+      f_blocks: cuint64;   //* size of fs in f_frsize units */
+      f_bfree: cuint64;    //* # free blocks */
+      f_bavail: cuint64;   //* # free blocks for non-root */
+      f_files: cuint64;    //* # inodes */
+      f_ffree: cuint64;    //* # free inodes */
+      f_favail: cuint64;   //* # free inodes for non-root */
+      f_fsid: cuint64;     //* file system ID */
+      f_flag: cuint64;     //* mount flags */
+      f_namemax: cuint64;  //* maximum filename length */
+  end;
   //* Malloc callbacks */
   LIBSSH2_ALLOC_FUNC = function(count: csize_t; abstract: Pointer): Pointer; cdecl;
   LIBSSH2_REALLOC_FUNC = function(ptr: Pointer; count: csize_t; abstract: Pointer): Pointer; cdecl;
@@ -196,6 +210,10 @@ var
   libssh2_sftp_unlink_ex: function(sftp: PLIBSSH2_SFTP;
                                    const filename: PAnsiChar;
                                    filename_len: cuint): cint; cdecl;
+  libssh2_sftp_statvfs: function(sftp: PLIBSSH2_SFTP;
+                                 const path: PAnsiChar;
+                                 path_len: csize_t;
+                                 st: PLIBSSH2_SFTP_STATVFS): cint; cdecl;
   libssh2_sftp_mkdir_ex: function(sftp: PLIBSSH2_SFTP;
                                   const path: PAnsiChar;
                                   path_len: cuint; mode: clong): cint; cdecl;
@@ -349,6 +367,7 @@ begin
     //* Miscellaneous Ops */
     libssh2_sftp_rename_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rename_ex');
     libssh2_sftp_unlink_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_unlink_ex');
+    libssh2_sftp_statvfs:= SafeGetProcAddress(libssh2, 'libssh2_sftp_statvfs');
     libssh2_sftp_mkdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_mkdir_ex');
     libssh2_sftp_rmdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rmdir_ex');
     libssh2_sftp_stat_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_stat_ex');
