@@ -36,7 +36,7 @@ type
 implementation
 
 uses
-  DCBasicTypes, DCStrUtils, uNetworkFileSourceUtil,  libssh;
+  DCBasicTypes, DCStrUtils, DCDateTimeUtils,  uNetworkFileSourceUtil,  libssh;
 
 { TSftpSetFilePropertyOperation }
 
@@ -99,11 +99,35 @@ begin
           Result := sfprSkipped;
       end;
 
-    fpLastAccessTime,
     fpModificationTime:
       begin
-        Result := sfprSkipped;
+         if (aTemplateProperty as TFileModificationDateTimeProperty).Value <>
+            (aFile.Properties[fpModificationTime] as TFileModificationDateTimeProperty).Value then
+         begin
+           NewAttributes.flags:= LIBSSH2_SFTP_ATTR_ACMODTIME;
+           NewAttributes.atime:= DateTimeToUnixFileTime(aFile.LastAccessTime);
+           NewAttributes.mtime:= DateTimeToUnixFileTime((aTemplateProperty as TFileModificationDateTimeProperty).Value);
+           if libssh2_sftp_setstat(Session_, PAnsiChar(FileName), @NewAttributes) < 0 then
+             Result := sfprError;
+         end
+         else
+           Result := sfprSkipped;
       end;
+
+     fpLastAccessTime:
+       begin
+         if (aTemplateProperty as TFileLastAccessDateTimeProperty).Value <>
+            (aFile.Properties[fpLastAccessTime] as TFileLastAccessDateTimeProperty).Value then
+         begin
+           NewAttributes.flags:= LIBSSH2_SFTP_ATTR_ACMODTIME;
+           NewAttributes.mtime:= DateTimeToUnixFileTime(aFile.ModificationTime);
+           NewAttributes.atime:= DateTimeToUnixFileTime((aTemplateProperty as TFileLastAccessDateTimeProperty).Value);
+           if libssh2_sftp_setstat(Session_, PAnsiChar(FileName), @NewAttributes) < 0 then
+             Result := sfprError;
+         end
+         else
+           Result := sfprSkipped;
+       end
 
     else
       raise Exception.Create('Trying to set unsupported property');
