@@ -30,7 +30,8 @@ type
 implementation
 
 uses
-  LCLProc, DCFileAttributes, uFileSourceOperationUI, uFile, libssh;
+  LCLProc, DCFileAttributes, uFileSourceOperationUI, uFile, libssh,
+  uNetworkFileSourceUtil;
 
 constructor TSftpListOperation.Create(aFileSource: IFileSource; aPath: String);
 begin
@@ -87,7 +88,7 @@ begin
 
   with FCurlFileSourceConnection do
   begin
-    RemotePath:= StringReplace(Path, PathDelim, '/', [rfReplaceAll]);
+    RemotePath:= CreateNetworkPath(Path);
         //* Request a dir listing via SFTP */
     Handle := libssh2_sftp_opendir(Session_, PAnsiChar(RemotePath));
 

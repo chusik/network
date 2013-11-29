@@ -75,7 +75,8 @@ type
 implementation
 
 uses
-  LCLProc, DCDateTimeUtils, uSftpListOperation, uSftpCopyOutOperation, uLog, uShowMsg;
+  LCLProc, DCDateTimeUtils, uSftpListOperation, uSftpCopyOutOperation, uLog,
+  uShowMsg, uNetworkFileSourceUtil;
 
 { TSftpFileSourceConnection }
 
@@ -114,7 +115,7 @@ var
   FingerPrint: array [0..Pred(HOSTKEY_SIZE)] of AnsiChar;
 begin
   logWrite('Connecting to: ' + URI.Host, lmtInfo, True);
-  sock.Connect(PAnsiChar('localhost'),'22');
+  sock.Connect(PAnsiChar('192.168.56.102'),'22');
   if sock.LastError=0 then
     begin
     session := libssh2_session_init();
@@ -170,6 +171,7 @@ begin
   with Result do
   begin
     SizeProperty:= TFileSizeProperty.Create;
+    LastAccessTimeProperty:= TFileLastAccessDateTimeProperty.Create;
     ModificationTimeProperty:= TFileModificationDateTimeProperty.Create;
     AttributesProperty := TUnixFileAttributesProperty.Create;
   end;
@@ -183,6 +185,7 @@ begin
   Result.Name:= AName;
   Result.Attributes:= Attrs^.permissions;
   if not Result.IsDirectory then Result.Size:= Attrs^.filesize;
+  Result.LastAccessTime:= UnixFileTimeToDateTime(Attrs^.atime);
   Result.ModificationTime:= UnixFileTimeToDateTime(Attrs^.mtime);
 end;
 
@@ -201,13 +204,13 @@ end;
 
 function TSftpFileSource.GetProperties: TFileSourceProperties;
 begin
-  Result := [fspVirtual, fspUsesConnections, fspListInMainThread];
+  Result := [fspUsesConnections, fspListInMainThread];
 end;
 
 function TSftpFileSource.GetSupportedFileProperties: TFilePropertiesTypes;
 begin
   Result := inherited GetSupportedFileProperties +
-            [fpSize, fpModificationTime, fpAttributes];
+            [fpSize, fpLastAccessTime, fpModificationTime, fpAttributes];
 end;
 
 procedure TSftpFileSource.FillAndCount(Connection: TObject; Files: TFiles;
@@ -226,7 +229,7 @@ var
     aFullData: array[0..1023] of AnsiChar;
     Attributes: LIBSSH2_SFTP_ATTRIBUTES;
   begin
-    RemotePath:= StringReplace(srcPath, PathDelim, '/', [rfReplaceAll]);
+    RemotePath:= CreateNetworkPath(srcPath);
         //* Request a dir listing via SFTP */
     Handle := libssh2_sftp_opendir(aConnection.Session_, PAnsiChar(RemotePath));
     if (Handle = nil) then Exit;
@@ -287,7 +290,7 @@ var
   aRemotePath: UTF8String;
   aConnection: TSftpFileSourceConnection absolute Connection;
 begin
-  aRemotePath:= StringReplace(aFile, PathDelim, '/', [rfReplaceAll]);
+  aRemotePath:= CreateNetworkPath(aFile);
   Result:= libssh2_sftp_unlink(aConnection.sftp_session, PAnsiChar(aRemotePath)) = 0;
 end;
 
@@ -297,7 +300,7 @@ var
   aRemotePath: UTF8String;
   aConnection: TSftpFileSourceConnection absolute Connection;
 begin
-  aRemotePath:= StringReplace(aDirectory, PathDelim, '/', [rfReplaceAll]);
+  aRemotePath:= CreateNetworkPath(aDirectory);
   Result:= libssh2_sftp_mkdir(aConnection.sftp_session,
                               PAnsiChar(aRemotePath),
                               LIBSSH2_SFTP_S_IRWXU or
@@ -311,7 +314,7 @@ var
   aRemotePath: UTF8String;
   aConnection: TSftpFileSourceConnection absolute Connection;
 begin
-  aRemotePath:= StringReplace(aDirectory, PathDelim, '/', [rfReplaceAll]);
+  aRemotePath:= CreateNetworkPath(aDirectory);
   Result:= libssh2_sftp_rmdir(aConnection.sftp_session, PAnsiChar(aRemotePath)) = 0;
 end;
 

@@ -64,7 +64,7 @@ begin
   while bRetry do
   begin
     bRetry := False;
-    RemotePath:= StringReplace(SourceFile.FullPath, PathDelim, '/', [rfReplaceAll]);
+    RemotePath:= CreateNetworkPath(SourceFile.FullPath);
 
     repeat
       SourceHandle:= libssh2_sftp_open(FCurlFileSourceConnection.Session_,
