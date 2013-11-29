@@ -7,12 +7,12 @@ interface
 uses
   Classes, SysUtils,
   uFileSourceProperty, uFileSourceOperationTypes,
-  uVirtualFileSource, uFileProperty, uFileSource,
+  uRealFileSource, uFileProperty, uFileSource,
   uFileSourceOperation, uFile;
 
 type
 
-  INetworkFileSource = interface(IVirtualFileSource)
+  INetworkFileSource = interface(IRealFileSource)
     ['{CDBDA3D4-B5CA-4092-9F8D-3D082268093E}']
 
     procedure FillAndCount(Connection: TObject; Files: TFiles;
@@ -27,7 +27,7 @@ type
 
   { TNetworkFileSource }
 
-  TNetworkFileSource = class(TVirtualFileSource, INetworkFileSource)
+  TNetworkFileSource = class(TRealFileSource, INetworkFileSource)
   protected
     procedure FillAndCount(Connection: TObject; Files: TFiles;
       CountDirs: boolean; out NewFiles: TFiles;
