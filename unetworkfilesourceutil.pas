@@ -7,9 +7,9 @@ interface
 uses
   Classes, SysUtils;
 
-type
-  TNetworkOperationHelperCopyMode =
-    (fsohcmDefault, fsohcmAppend, fsohcmResume);
+//type
+  //TNetworkOperationHelperCopyMode =
+  //  (fsohcmDefault, fsohcmAppend, fsohcmResume);
 
 implementation
 

@@ -38,7 +38,8 @@ type
 implementation
 
 uses
-  libssh, uGlobs, uLog, uLng, uFileSourceOperationUI, DCOSUtils, uOSUtils;
+  libssh, uGlobs, uLog, uLng, uFileSourceOperationUI, DCOSUtils, uOSUtils,
+  uFileSystemUtil;
 
 { TSftpCopyOutOperation }
 

@@ -207,7 +207,7 @@ var
 implementation
 
 uses
-  DynLibs;
+  DynLibs, uVfsModule, uSftpFileSource;
 
 function libssh2_session_init: PLIBSSH2_SESSION;
 begin
@@ -310,6 +310,8 @@ begin
     libssh2_sftp_unlink_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_unlink_ex');
     libssh2_sftp_mkdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_mkdir_ex');
     libssh2_sftp_rmdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rmdir_ex');
+
+    RegisterVirtualFileSource('Secure Shell', TSftpFileSource, False);
   except
   end;
 end;

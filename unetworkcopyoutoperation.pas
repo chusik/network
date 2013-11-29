@@ -15,7 +15,8 @@ uses
   uFileSourceOperationOptionsUI,
   uFile,
   uNetworkFileSource,
-  uNetworkFileSourceUtil;
+  uNetworkFileSourceUtil,
+  uFileSystemUtil;
 
 type
 
@@ -30,13 +31,24 @@ type
     FReserveSpace,
     FCheckFreeSpace: Boolean;
     FSkipAllBigFiles: Boolean;
+    FRenamingFiles,
+    FRenamingRootDir: Boolean;
+    FRenameNameMask, FRenameExtMask: String;
     FFileExistsOption: TFileSourceOperationOptionFileExists;
+    FDirExistsOption: TFileSourceOperationOptionDirectoryExists;
   private
     function ProcessFile(aFile: TFile; AbsoluteTargetFileName: String): Boolean;
     function ProcessDirectory(aFile: TFile; AbsoluteTargetFileName: String): Boolean;
+    function TargetExists(aFile: TFile; AbsoluteTargetFileName: String): TFileSystemOperationTargetExistsResult;
+    function DirExists(aFile: TFile;
+                       AbsoluteTargetFileName: String;
+                       AllowCopyInto: Boolean): TFileSourceOperationOptionDirectoryExists;
+    function FileExists(aFile: TFile;
+                        AbsoluteTargetFileName: String;
+                        AllowAppend: Boolean): TFileSourceOperationOptionFileExists;
   protected
     FBuffer: PByte;
-    FMode: TNetworkOperationHelperCopyMode;
+    FMode: TFileSystemOperationHelperCopyMode;
     FSkipReadError: Boolean;
     FSkipWriteError: Boolean;
     FSkipOpenForReadingError: Boolean;
@@ -69,7 +81,8 @@ type
 implementation
 
 uses
-  uFileSourceOperationUI, uLng, uOSUtils, DCOSUtils;
+  uFileSourceOperationUI, uLng, uOSUtils, DCOSUtils, uTypes, DCBasicTypes,
+  uFileProcs, DCDateTimeUtils, DCStrUtils;
 
 // -- TNetworkCopyOutOperation ---------------------------------------------
 
@@ -118,7 +131,325 @@ end;
 function TNetworkCopyOutOperation.ProcessDirectory(aFile: TFile;
   AbsoluteTargetFileName: String): Boolean;
 begin
+  case TargetExists(aFile, AbsoluteTargetFileName) of
+    fsoterSkip:
+      begin
+        Result := False;
+        //CountStatistics(aNode);
+      end;
 
+    fsoterDeleted, fsoterNotExists:
+      begin
+        begin
+          // Create target directory.
+          if mbCreateDir(AbsoluteTargetFileName) then
+          begin
+            Result:= True;
+            // Copy/Move all files inside.
+            // Result := ProcessNode(aNode, IncludeTrailingPathDelimiter(AbsoluteTargetFileName));
+            // Copy attributes after copy/move directory contents, because this operation can change date/time
+            // CopyProperties(aNode.TheFile.FullPath, AbsoluteTargetFileName);
+          end
+          else
+          begin
+            // Error - all files inside not copied/moved.
+            // ShowError(rsMsgLogError + Format(rsMsgErrForceDir, [AbsoluteTargetFileName]));
+            Result := False;
+            // CountStatistics(aNode);
+          end;
+        end;
+      end;
+
+    fsoterAddToTarget:
+      begin
+        // Don't create existing directory, but copy files into it.
+        Result := True;
+      end;
+
+    else
+      raise Exception.Create('Invalid TargetExists result');
+  end;
+end;
+
+function TNetworkCopyOutOperation.TargetExists(aFile: TFile;
+  AbsoluteTargetFileName: String): TFileSystemOperationTargetExistsResult;
+var
+  Attrs, LinkTargetAttrs: TFileAttrs;
+  SourceFile: TFile;
+
+  function DoDirectoryExists(AllowCopyInto: Boolean): TFileSystemOperationTargetExistsResult;
+  begin
+    case DirExists(SourceFile, AbsoluteTargetFileName, AllowCopyInto) of
+      fsoodeSkip:
+        Exit(fsoterSkip);
+      fsoodeDelete:
+        begin
+          if FPS_ISLNK(Attrs) then
+            mbDeleteFile(AbsoluteTargetFileName)
+          else
+            DelTree(AbsoluteTargetFileName);
+          Exit(fsoterDeleted);
+        end;
+      fsoodeCopyInto:
+        begin
+          Exit(fsoterAddToTarget);
+        end;
+      else
+        raise Exception.Create('Invalid dir exists option');
+    end;
+  end;
+
+  function DoFileExists(AllowAppend: Boolean): TFileSystemOperationTargetExistsResult;
+  begin
+    case FileExists(SourceFile, AbsoluteTargetFileName, AllowAppend) of
+      fsoofeSkip:
+        Exit(fsoterSkip);
+      fsoofeOverwrite:
+        begin
+          mbDeleteFile(AbsoluteTargetFileName);
+          Exit(fsoterDeleted);
+        end;
+      fsoofeAppend:
+        begin
+          Exit(fsoterAddToTarget);
+        end;
+      fsoofeResume:
+        begin
+          Exit(fsoterResume);
+        end;
+      else
+        raise Exception.Create('Invalid file exists option');
+    end;
+  end;
+
+  function IsLinkFollowed: Boolean;
+  begin
+    // If link was followed then it's target is stored in a subnode.
+    Result := SourceFile.AttributesProperty.IsLink;// and (aNode.SubNodesCount > 0);
+  end;
+
+  function AllowAppendFile: Boolean;
+  begin
+    Result := (not SourceFile.AttributesProperty.IsDirectory) and (not FReserveSpace) and
+              ((not SourceFile.AttributesProperty.IsLink) or
+               (IsLinkFollowed and (not aFile.AttributesProperty.IsDirectory)));
+  end;
+
+  function AllowCopyInto: Boolean;
+  begin
+    Result := SourceFile.AttributesProperty.IsDirectory or
+              (IsLinkFollowed and aFile.IsDirectory);
+  end;
+
+begin
+  Attrs := mbFileGetAttr(AbsoluteTargetFileName);
+  if Attrs <> faInvalidAttributes then
+  begin
+    SourceFile := aFile;
+
+    // Target exists - ask user what to do.
+    if FPS_ISDIR(Attrs) then
+    begin
+      Result := DoDirectoryExists(AllowCopyInto)
+    end
+    else if FPS_ISLNK(Attrs) then
+    begin
+      // Check if target of the link exists.
+      LinkTargetAttrs := mbFileGetAttrNoLinks(AbsoluteTargetFileName);
+      if (LinkTargetAttrs <> faInvalidAttributes) then
+      begin
+        if FPS_ISDIR(LinkTargetAttrs) then
+          Result := DoDirectoryExists(AllowCopyInto)
+        else
+          Result := DoFileExists(AllowAppendFile);
+      end
+      else
+        // Target of link doesn't exist. Treat link as file and don't allow append.
+        Result := DoFileExists(False);
+    end
+    else
+      // Existing target is a file.
+      Result := DoFileExists(AllowAppendFile);
+  end
+  else
+    Result := fsoterNotExists;
+end;
+
+function TNetworkCopyOutOperation.DirExists(aFile: TFile;
+  AbsoluteTargetFileName: String; AllowCopyInto: Boolean
+  ): TFileSourceOperationOptionDirectoryExists;
+var
+  PossibleResponses: array of TFileSourceOperationUIResponse = nil;
+  DefaultOkResponse: TFileSourceOperationUIResponse;
+
+  procedure AddResponse(Response: TFileSourceOperationUIResponse);
+  begin
+    SetLength(PossibleResponses, Length(PossibleResponses) + 1);
+    PossibleResponses[Length(PossibleResponses) - 1] := Response;
+  end;
+
+begin
+  case FDirExistsOption of
+    fsoodeNone:
+      begin
+        if AllowCopyInto then
+        begin
+          AddResponse(fsourCopyInto);
+          AddResponse(fsourCopyIntoAll);
+        end;
+        AddResponse(fsourSkip);
+        AddResponse(fsourSkipAll);
+        AddResponse(fsourCancel);
+
+        if AllowCopyInto then
+          DefaultOkResponse := fsourCopyInto
+        else
+          DefaultOkResponse := fsourSkip;
+
+        case AskQuestion(Format(rsMsgFolderExistsRwrt, [AbsoluteTargetFileName]), '',
+                         PossibleResponses, DefaultOkResponse, fsourSkip) of
+          fsourOverwrite:
+            Result := fsoodeDelete;
+          fsourCopyInto:
+            Result := fsoodeCopyInto;
+          fsourCopyIntoAll:
+            begin
+              FDirExistsOption := fsoodeCopyInto;
+              Result := fsoodeCopyInto;
+            end;
+          fsourSkip:
+            Result := fsoodeSkip;
+          fsourOverwriteAll:
+            begin
+              FDirExistsOption := fsoodeDelete;
+              Result := fsoodeDelete;
+            end;
+          fsourSkipAll:
+            begin
+              FDirExistsOption := fsoodeSkip;
+              Result := fsoodeSkip;
+            end;
+          fsourNone,
+          fsourCancel:
+            RaiseAbortOperation;
+        end;
+      end;
+
+    else
+      Result := FDirExistsOption;
+  end;
+end;
+
+function TNetworkCopyOutOperation.FileExists(aFile: TFile;
+  AbsoluteTargetFileName: String; AllowAppend: Boolean
+  ): TFileSourceOperationOptionFileExists;
+const
+  Responses: array[0..9] of TFileSourceOperationUIResponse
+    = (fsourOverwrite, fsourSkip, fsourAppend, fsourOverwriteAll,
+       fsourSkipAll, fsourResume, fsourOverwriteOlder, fsourCancel,
+       fsourOverwriteSmaller, fsourOverwriteLarger);
+  ResponsesNoAppend: array[0..5] of TFileSourceOperationUIResponse
+    = (fsourOverwrite, fsourSkip, fsourOverwriteAll, fsourSkipAll,
+       fsourOverwriteOlder, fsourCancel);
+var
+  Message: String;
+  PossibleResponses: array of TFileSourceOperationUIResponse;
+
+  function OverwriteOlder: TFileSourceOperationOptionFileExists;
+  begin
+    if aFile.ModificationTime > FileTimeToDateTime(mbFileAge(AbsoluteTargetFileName)) then
+      Result := fsoofeOverwrite
+    else
+      Result := fsoofeSkip;
+  end;
+
+  function OverwriteSmaller: TFileSourceOperationOptionFileExists;
+  begin
+    if aFile.Size > mbFileSize(AbsoluteTargetFileName) then
+      Result := fsoofeOverwrite
+    else
+      Result := fsoofeSkip;
+  end;
+
+  function OverwriteLarger: TFileSourceOperationOptionFileExists;
+  begin
+    if aFile.Size < mbFileSize(AbsoluteTargetFileName) then
+      Result := fsoofeOverwrite
+    else
+      Result := fsoofeSkip;
+  end;
+
+begin
+  case FFileExistsOption of
+    fsoofeNone:
+      begin
+        case AllowAppend of
+          True :  PossibleResponses := Responses;
+          False:  PossibleResponses := ResponsesNoAppend;
+        end;
+        Message:= FileExistsMessage(AbsoluteTargetFileName, aFile.FullPath,
+                                    aFile.Size, aFile.ModificationTime);
+        case AskQuestion(Message, '',
+                         PossibleResponses, fsourOverwrite, fsourSkip) of
+          fsourOverwrite:
+            Result := fsoofeOverwrite;
+          fsourSkip:
+            Result := fsoofeSkip;
+          fsourAppend:
+            begin
+              //FFileExistsOption := fsoofeAppend; - for AppendAll
+              Result := fsoofeAppend;
+            end;
+          fsourResume:
+            begin
+              Result := fsoofeResume;
+            end;
+          fsourOverwriteAll:
+            begin
+              FFileExistsOption := fsoofeOverwrite;
+              Result := fsoofeOverwrite;
+            end;
+          fsourSkipAll:
+            begin
+              FFileExistsOption := fsoofeSkip;
+              Result := fsoofeSkip;
+            end;
+          fsourOverwriteOlder:
+            begin
+              FFileExistsOption := fsoofeOverwriteOlder;
+              Result:= OverwriteOlder;
+            end;
+          fsourOverwriteSmaller:
+            begin
+              FFileExistsOption := fsoofeOverwriteSmaller;
+              Result:= OverwriteSmaller;
+            end;
+          fsourOverwriteLarger:
+            begin
+              FFileExistsOption := fsoofeOverwriteLarger;
+              Result:= OverwriteLarger;
+            end;
+          fsourNone,
+          fsourCancel:
+            RaiseAbortOperation;
+        end;
+      end;
+    fsoofeOverwriteOlder:
+      begin
+        Result:= OverwriteOlder;
+      end;
+    fsoofeOverwriteSmaller:
+      begin
+        Result:= OverwriteSmaller;
+      end;
+    fsoofeOverwriteLarger:
+      begin
+        Result:= OverwriteLarger;
+      end;
+
+    else
+      Result := FFileExistsOption;
+  end;
 end;
 
 procedure TNetworkCopyOutOperation.LogMessage(sMessage: String;
@@ -290,6 +621,9 @@ constructor TNetworkCopyOutOperation.Create(aSourceFileSource: IFileSource;
 begin
   FBuffer:= GetMem(65536);
   FNetworkFileSource:= aSourceFileSource as INetworkFileSource;
+  FRenamingFiles := False;
+  FRenamingRootDir := False;
+  FFileExistsOption := fsoofeNone;
 
   inherited Create(aSourceFileSource, aTargetFileSource, theSourceFiles, aTargetPath);
 end;
@@ -310,6 +644,13 @@ begin
                                   FFullFilesTreeToCopy,
                                   FStatistics.TotalFiles,
                                   FStatistics.TotalBytes);
+  // Split file mask into name and extension
+  SplitFileMask(RenameMask, FRenameNameMask, FRenameExtMask);
+
+  // Create destination path if it doesn't exist.
+  if not mbDirectoryExists(TargetPath) then
+    if not mbForceDirectory(TargetPath) then
+      Exit; // do error
 end;
 
 procedure TNetworkCopyOutOperation.MainExecute;
@@ -320,14 +661,35 @@ var
   CurrentFileIndex: Integer;
   AbsoluteTargetFileName: String;
 begin
-  for CurrentFileIndex := FFullFilesTreeToCopy.Count - 1 downto 0 do
+  FRenamingFiles := (RenameMask <> '*.*') and (RenameMask <> '');
+
+  // If there is a single root dir and rename mask doesn't have wildcards
+  // treat is as a rename of the root dir.
+  if (FFullFilesTreeToCopy.Count = 1) and FRenamingFiles then
+  begin
+    aFile := FFullFilesTreeToCopy[0];
+    if (aFile.IsDirectory or aFile.IsLinkToDirectory) and
+       not ContainsWildcards(RenameMask) then
+    begin
+      FRenamingFiles := False;
+      FRenamingRootDir := True;
+    end;
+  end;
+
+  for CurrentFileIndex:= 0 to FFullFilesTreeToCopy.Count - 1 do
   begin
     // If there will be an error the DoneBytes value
     // will be inconsistent, so remember it here.
     OldDoneBytes := FStatistics.DoneBytes;
 
     aFile := FFullFilesTreeToCopy[CurrentFileIndex];
-    AbsoluteTargetFileName:= TargetPath + aFile.Name;
+    // Filenames must be relative to the current directory.
+    AbsoluteTargetFileName := TargetPath + ExtractDirLevel(FFullFilesTreeToCopy.Path, aFile.Path);
+
+    if FRenamingRootDir then
+      AbsoluteTargetFileName := AbsoluteTargetFileName + RenameMask
+    else
+      AbsoluteTargetFileName := AbsoluteTargetFileName + uFileSystemUtil.ApplyRenameMask(aFile, FRenameNameMask, FRenameExtMask);
 
     with FStatistics do
     begin
