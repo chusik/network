@@ -5,7 +5,7 @@ unit uSftpFileSource;
 interface
 
 uses
-  Classes, SysUtils, URIParser, libssh2, blcksock,libssh2_sftp,
+  Classes, SysUtils, URIParser, blcksock, libssh,
   uFileSourceProperty, uFileSourceOperationTypes,
   uNetworkFileSource, uFileProperty, uFileSource,
   uFileSourceOperation, uFile;

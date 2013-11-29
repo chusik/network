@@ -1,6 +1,6 @@
 unit libssh;
 
-{$mode objfpc}{$H+}
+{$mode delphi}
 {$packrecords c}
 
 interface
@@ -30,6 +30,56 @@ const
   SSH_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE = 14;
   SSH_DISCONNECT_ILLEGAL_USER_NAME              = 15;
 
+  { Error Codes (defined by libssh2)  }
+  LIBSSH2_ERROR_NONE = 0;
+  LIBSSH2_ERROR_SOCKET_NONE = -(1);
+  LIBSSH2_ERROR_BANNER_RECV = -(2);
+  LIBSSH2_ERROR_BANNER_SEND = -(3);
+  LIBSSH2_ERROR_INVALID_MAC = -(4);
+  LIBSSH2_ERROR_KEX_FAILURE = -(5);
+  LIBSSH2_ERROR_ALLOC = -(6);
+  LIBSSH2_ERROR_SOCKET_SEND = -(7);
+  LIBSSH2_ERROR_KEY_EXCHANGE_FAILURE = -(8);
+  LIBSSH2_ERROR_TIMEOUT = -(9);
+  LIBSSH2_ERROR_HOSTKEY_INIT = -(10);
+  LIBSSH2_ERROR_HOSTKEY_SIGN = -(11);
+  LIBSSH2_ERROR_DECRYPT = -(12);
+  LIBSSH2_ERROR_SOCKET_DISCONNECT = -(13);
+  LIBSSH2_ERROR_PROTO = -(14);
+  LIBSSH2_ERROR_PASSWORD_EXPIRED = -(15);
+  LIBSSH2_ERROR_FILE = -(16);
+  LIBSSH2_ERROR_METHOD_NONE = -(17);
+  LIBSSH2_ERROR_AUTHENTICATION_FAILED = -(18);
+  LIBSSH2_ERROR_PUBLICKEY_UNRECOGNIZED = LIBSSH2_ERROR_AUTHENTICATION_FAILED;
+  LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED = -(19);
+  LIBSSH2_ERROR_CHANNEL_OUTOFORDER = -(20);
+  LIBSSH2_ERROR_CHANNEL_FAILURE = -(21);
+  LIBSSH2_ERROR_CHANNEL_REQUEST_DENIED = -(22);
+  LIBSSH2_ERROR_CHANNEL_UNKNOWN = -(23);
+  LIBSSH2_ERROR_CHANNEL_WINDOW_EXCEEDED = -(24);
+  LIBSSH2_ERROR_CHANNEL_PACKET_EXCEEDED = -(25);
+  LIBSSH2_ERROR_CHANNEL_CLOSED = -(26);
+  LIBSSH2_ERROR_CHANNEL_EOF_SENT = -(27);
+  LIBSSH2_ERROR_SCP_PROTOCOL = -(28);
+  LIBSSH2_ERROR_ZLIB = -(29);
+  LIBSSH2_ERROR_SOCKET_TIMEOUT = -(30);
+  LIBSSH2_ERROR_SFTP_PROTOCOL = -(31);
+  LIBSSH2_ERROR_REQUEST_DENIED = -(32);
+  LIBSSH2_ERROR_METHOD_NOT_SUPPORTED = -(33);
+  LIBSSH2_ERROR_INVAL = -(34);
+  LIBSSH2_ERROR_INVALID_POLL_TYPE = -(35);
+  LIBSSH2_ERROR_PUBLICKEY_PROTOCOL = -(36);
+  LIBSSH2_ERROR_EAGAIN = -(37);
+  LIBSSH2_ERROR_BUFFER_TOO_SMALL = -(38);
+  LIBSSH2_ERROR_BAD_USE = -(39);
+  LIBSSH2_ERROR_COMPRESS = -(40);
+  LIBSSH2_ERROR_OUT_OF_BOUNDARY = -(41);
+  LIBSSH2_ERROR_AGENT_PROTOCOL = -(42);
+  LIBSSH2_ERROR_SOCKET_RECV = -(43);
+  LIBSSH2_ERROR_ENCRYPT = -(44);
+  LIBSSH2_ERROR_BAD_SOCKET = -(45);
+  LIBSSH2_ERROR_KNOWN_HOSTS = -(46);
+
   //* Flags for open_ex() */
   _LIBSSH2_SFTP_OPENFILE                        = 0;
   _LIBSSH2_SFTP_OPENDIR                         = 1;
@@ -55,6 +105,14 @@ const
   LIBSSH2_SFTP_S_IROTH        = 4;       //* R for other */
   LIBSSH2_SFTP_S_IWOTH        = 2;       //* W for other */
   LIBSSH2_SFTP_S_IXOTH        = 1;       //* X for other */
+
+  //* SFTP File Transfer Flags -- (e.g. flags parameter to sftp_open()) */
+  LIBSSH2_FXF_READ            = $00000001;
+  LIBSSH2_FXF_WRITE           = $00000002;
+  LIBSSH2_FXF_APPEND          = $00000004;
+  LIBSSH2_FXF_CREAT           = $00000008;
+  LIBSSH2_FXF_TRUNC           = $00000010;
+  LIBSSH2_FXF_EXCL            = $00000020;
 
 type
   //* Session API */
@@ -92,7 +150,7 @@ var
                                           const lang: PAnsiChar): cint; cdecl;
   libssh2_session_free: function(session: PLIBSSH2_SESSION): cint; cdecl;
   libssh2_session_set_blocking: procedure(session: PLIBSSH2_SESSION; blocking: cint); cdecl;
-
+  libssh2_session_last_errno: function(session: PLIBSSH2_SESSION): cint; cdecl;
   //* Userauth API */
   libssh2_userauth_password_ex: function(session: PLIBSSH2_SESSION;
                                          const username: PAnsiChar;
@@ -103,15 +161,18 @@ var
   //* SFTP API */
   libssh2_sftp_init: function(session: PLIBSSH2_SESSION): PLIBSSH2_SFTP; cdecl;
   libssh2_sftp_shutdown: function(sftp: PLIBSSH2_SFTP): cint; cdecl;
+  libssh2_sftp_last_error: function(sftp: PLIBSSH2_SFTP): culong; cdecl;
   //* File / Directory Ops */
   libssh2_sftp_open_ex: function(sftp: PLIBSSH2_SFTP;
                                  const filename: PAnsiChar;
                                  filename_len: cint; flags: culong;
                                  mode: clong; open_type: cint): PLIBSSH2_SFTP_HANDLE; cdecl;
-   libssh2_sftp_readdir_ex: function(handle: PLIBSSH2_SFTP_HANDLE;
-                                     buffer: PAnsiChar; buffer_maxlen: csize_t;
-                                     longentry: PAnsiChar; longentry_maxlen: csize_t;
-                                     attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; cdecl;
+  libssh2_sftp_read: function(handle: PLIBSSH2_SFTP_HANDLE;
+                              buffer: PAnsiChar; buffer_maxlen: csize_t): Integer; cdecl;
+  libssh2_sftp_readdir_ex: function(handle: PLIBSSH2_SFTP_HANDLE;
+                                    buffer: PAnsiChar; buffer_maxlen: csize_t;
+                                   longentry: PAnsiChar; longentry_maxlen: csize_t;
+                                    attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; cdecl;
   libssh2_sftp_close_handle: function(handle: PLIBSSH2_SFTP_HANDLE): cint; cdecl;
   //* Miscellaneous Ops */
   libssh2_sftp_rename_ex: function(sftp: PLIBSSH2_SFTP;
@@ -144,6 +205,9 @@ var
   function libssh2_sftp_rmdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar): cint; inline;
 
 implementation
+
+uses
+  DynLibs;
 
 function libssh2_session_init: PLIBSSH2_SESSION;
 begin
@@ -208,5 +272,51 @@ begin
   Result:= libssh2_sftp_rmdir_ex(sftp, path, strlen(path));
 end;
 
+var
+  libssh2: TLibHandle = NilHandle;
+
+function SafeGetProcAddress(Lib : TlibHandle; const ProcName : AnsiString) : Pointer;
+begin
+  Result:= GetProcedureAddress(Lib, ProcName);
+  if (Result = nil) then raise Exception.Create(EmptyStr);
+end;
+
+procedure Initialize;
+begin
+  libssh2:= LoadLibrary('libssh2.dll');
+  if (libssh2 <> NilHandle) then
+  try
+    //* Session API */
+    libssh2_session_init_ex:= SafeGetProcAddress(libssh2, 'libssh2_session_init_ex');
+    libssh2_session_startup:= SafeGetProcAddress(libssh2, 'libssh2_session_startup');
+    libssh2_hostkey_hash:= SafeGetProcAddress(libssh2, 'libssh2_hostkey_hash');
+    libssh2_session_disconnect_ex:= SafeGetProcAddress(libssh2, 'libssh2_session_disconnect_ex');
+    libssh2_session_free:= SafeGetProcAddress(libssh2, 'libssh2_session_free');
+    libssh2_session_set_blocking:= SafeGetProcAddress(libssh2, 'libssh2_session_set_blocking');
+    libssh2_session_last_errno:= SafeGetProcAddress(libssh2, 'libssh2_session_last_errno');
+    //* Userauth API */
+    libssh2_userauth_password_ex:= SafeGetProcAddress(libssh2, 'libssh2_userauth_password_ex');
+    //* SFTP API */
+    libssh2_sftp_init:= SafeGetProcAddress(libssh2, 'libssh2_sftp_init');
+    libssh2_sftp_shutdown:= SafeGetProcAddress(libssh2, 'libssh2_sftp_shutdown');
+    libssh2_sftp_last_error:= SafeGetProcAddress(libssh2, 'libssh2_sftp_last_error');
+    //* File / Directory Ops */
+    libssh2_sftp_open_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_open_ex');
+    libssh2_sftp_read:= SafeGetProcAddress(libssh2, 'libssh2_sftp_read');
+    libssh2_sftp_readdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_readdir_ex');
+    libssh2_sftp_close_handle:= SafeGetProcAddress(libssh2, 'libssh2_sftp_close_handle');
+    //* Miscellaneous Ops */
+    libssh2_sftp_rename_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rename_ex');
+    libssh2_sftp_unlink_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_unlink_ex');
+    libssh2_sftp_mkdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_mkdir_ex');
+    libssh2_sftp_rmdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rmdir_ex');
+  except
+  end;
+end;
+
+initialization
+  Initialize;
+finalization
+  if (libssh2 <> NilHandle) then FreeLibrary(libssh2);
 end.
 

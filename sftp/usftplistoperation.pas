@@ -30,7 +30,7 @@ type
 implementation
 
 uses
-  LCLProc, DCFileAttributes, uFileSourceOperationUI, uFile, libssh2, libssh2_sftp;
+  LCLProc, DCFileAttributes, uFileSourceOperationUI, uFile, libssh;
 
 constructor TSftpListOperation.Create(aFileSource: IFileSource; aPath: String);
 begin
