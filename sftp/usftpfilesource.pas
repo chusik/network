@@ -54,6 +54,8 @@ type
     function CreateCopyOutOperation(TargetFileSource: IFileSource;
                                     var SourceFiles: TFiles;
                                     TargetPath: String): TFileSourceOperation; override;
+    function CreateSetFilePropertyOperation(var theTargetFiles: TFiles;
+                                            var theNewProperties: TFileProperties): TFileSourceOperation; override;
   end;
 
   { TSftpFileSourceConnection }
@@ -76,7 +78,7 @@ implementation
 
 uses
   LCLProc, DCDateTimeUtils, uSftpListOperation, uSftpCopyOutOperation, uLog,
-  uShowMsg, uNetworkFileSourceUtil;
+  uShowMsg, uNetworkFileSourceUtil, uSftpSetFilePropertyOperation;
 
 { TSftpFileSourceConnection }
 
@@ -199,7 +201,7 @@ end;
 
 function TSftpFileSource.GetOperationsTypes: TFileSourceOperationTypes;
 begin
-  Result := [fsoList, fsoCreateDirectory, fsoDelete, fsoCopyOut];
+  Result := [fsoList, fsoCreateDirectory, fsoDelete, fsoCopyOut, fsoSetFileProperty];
 end;
 
 function TSftpFileSource.GetProperties: TFileSourceProperties;
@@ -344,6 +346,16 @@ begin
   Result := TSftpCopyOutOperation.Create(SourceFileSource,
                                               TargetFileSource,
                                               SourceFiles, TargetPath);
+end;
+
+function TSftpFileSource.CreateSetFilePropertyOperation(
+  var theTargetFiles: TFiles; var theNewProperties: TFileProperties
+  ): TFileSourceOperation;
+var
+  TargetFileSource: IFileSource;
+begin
+  TargetFileSource := Self;
+  Result := TSftpSetFilePropertyOperation.Create(TargetFileSource, theTargetFiles, theNewProperties);
 end;
 
 end.

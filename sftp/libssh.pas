@@ -89,6 +89,18 @@ const
   LIBSSH2_SFTP_RENAME_ATOMIC                    = $00000002;
   LIBSSH2_SFTP_RENAME_NATIVE                    = $00000004;
 
+  //* Flags for stat_ex() */
+  _LIBSSH2_SFTP_STAT                            = 0;
+  _LIBSSH2_SFTP_LSTAT                           = 1;
+  _LIBSSH2_SFTP_SETSTAT                         = 2;
+
+  //* SFTP attribute flag bits */
+  LIBSSH2_SFTP_ATTR_SIZE                        = $00000001;
+  LIBSSH2_SFTP_ATTR_UIDGID                      = $00000002;
+  LIBSSH2_SFTP_ATTR_PERMISSIONS                 = $00000004;
+  LIBSSH2_SFTP_ATTR_ACMODTIME                   = $00000008;
+  LIBSSH2_SFTP_ATTR_EXTENDED                    = $80000000;
+
   //* File mode */
   //* Read, write, execute/search by owner */
   LIBSSH2_SFTP_S_IRWXU        = 448;     //* RWX mask for owner */
@@ -190,6 +202,11 @@ var
   libssh2_sftp_rmdir_ex: function(sftp: PLIBSSH2_SFTP;
                                   const path: PAnsiChar;
                                   path_len: cuint): cint; cdecl;
+  libssh2_sftp_stat_ex: function(sftp: PLIBSSH2_SFTP;
+                                 const path: PAnsiChar;
+                                 path_len: cuint;
+                                 stat_type: cint;
+                                 attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; cdecl;
 
   //* Inline functions */
   function libssh2_session_init: PLIBSSH2_SESSION; inline;
@@ -203,6 +220,9 @@ var
   function libssh2_sftp_unlink(sftp: PLIBSSH2_SFTP; const filename: PAnsiChar): cint; inline;
   function libssh2_sftp_mkdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; mode: clong): cint; inline;
   function libssh2_sftp_rmdir(sftp: PLIBSSH2_SFTP; const path: PAnsiChar): cint; inline;
+  function libssh2_sftp_stat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; inline;
+  function libssh2_sftp_lstat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; inline;
+  function libssh2_sftp_setstat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; inline;
 
 implementation
 
@@ -272,6 +292,27 @@ begin
   Result:= libssh2_sftp_rmdir_ex(sftp, path, strlen(path));
 end;
 
+function libssh2_sftp_stat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar;
+  attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint;
+begin
+  Result:= libssh2_sftp_stat_ex(sftp, path, strlen(path), _LIBSSH2_SFTP_STAT, attrs);
+end;
+
+function libssh2_sftp_lstat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar;
+  attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint;
+begin
+  Result:= libssh2_sftp_stat_ex(sftp, path, strlen(path), _LIBSSH2_SFTP_LSTAT, attrs);
+end;
+
+function libssh2_sftp_setstat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar;
+  attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint;
+begin
+  repeat
+    Result:= libssh2_sftp_stat_ex(sftp, path, strlen(path), _LIBSSH2_SFTP_SETSTAT, attrs);
+    Sleep(1);
+  until Result <> LIBSSH2_ERROR_EAGAIN;
+end;
+
 var
   libssh2: TLibHandle = NilHandle;
 
@@ -310,6 +351,7 @@ begin
     libssh2_sftp_unlink_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_unlink_ex');
     libssh2_sftp_mkdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_mkdir_ex');
     libssh2_sftp_rmdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rmdir_ex');
+    libssh2_sftp_stat_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_stat_ex');
 
     RegisterVirtualFileSource('Secure Shell', TSftpFileSource, False);
   except
