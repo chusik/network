@@ -36,7 +36,7 @@ type
     class function IsSupportedPath(const Path: String): Boolean; override;
 
     class function CreateFile(const APath: String): TFile; override;
-    class function CreateFile(const APath, AName: String; Attrs: PLIBSSH2_SFTP_ATTRIBUTES): TFile;
+    class function CreateFile(Connection: TObject; const APath, AName: String; Attrs: PLIBSSH2_SFTP_ATTRIBUTES): TFile;
 
     function GetConnection(Operation: TFileSourceOperation): TFileSourceConnection; override;
 
@@ -80,7 +80,7 @@ implementation
 
 uses
   LCLProc, DCDateTimeUtils, uSftpListOperation, uSftpCopyOutOperation, uLog,
-  uShowMsg, uNetworkFileSourceUtil, uSftpSetFilePropertyOperation;
+  uShowMsg, uNetworkFileSourceUtil, uSftpSetFilePropertyOperation, DCFileAttributes;
 
 { TSftpFileSourceConnection }
 
@@ -138,7 +138,7 @@ begin
       //Inc(I);
     end;
     logWrite(S, lmtInfo, True);
-    if libssh2_userauth_password(session, pchar('alexx'), pchar('198539'))<>0 then
+    if libssh2_userauth_password(session, pchar('alexx'), pchar('19891001'))<>0 then
     begin
       logWrite('Authentication by password failed', lmtError, True);
       Exit(False);
@@ -178,11 +178,16 @@ begin
     LastAccessTimeProperty:= TFileLastAccessDateTimeProperty.Create;
     ModificationTimeProperty:= TFileModificationDateTimeProperty.Create;
     AttributesProperty := TUnixFileAttributesProperty.Create;
+    LinkProperty:= TFileLinkProperty.Create;
   end;
 end;
 
-class function TSftpFileSource.CreateFile(const APath, AName: String;
-  Attrs: PLIBSSH2_SFTP_ATTRIBUTES): TFile;
+class function TSftpFileSource.CreateFile(Connection: TObject; const APath,
+  AName: String; Attrs: PLIBSSH2_SFTP_ATTRIBUTES): TFile;
+var
+  RemotePath: UTF8String;
+  LinkTarget: array[0..1023] of AnsiChar;
+  Conn: TSftpFileSourceConnection absolute Connection;
 begin
   Result:= CreateFile(APath);
 
@@ -191,6 +196,15 @@ begin
   if not Result.IsDirectory then Result.Size:= Attrs^.filesize;
   Result.LastAccessTime:= UnixFileTimeToDateTime(Attrs^.atime);
   Result.ModificationTime:= UnixFileTimeToDateTime(Attrs^.mtime);
+  if (Attrs^.permissions and S_IFLNK) > 0 then
+  begin
+    RemotePath:= CreateNetworkPath(APath + AName);
+    libssh2_sftp_stat(Conn.Session_, PAnsiChar(RemotePath), Attrs);
+    Result.LinkProperty.IsLinkToDirectory:= (Attrs^.permissions and S_IFDIR) > 0;
+    Result.LinkProperty.IsValid:= libssh2_sftp_readlink(Conn.Session_,
+    PAnsiChar(RemotePath), LinkTarget, Length(LinkTarget)) > 0;
+    if Result.LinkProperty.IsValid then Result.LinkProperty.LinkTo:= LinkTarget;
+  end;
 end;
 
 function TSftpFileSource.GetConnection(Operation: TFileSourceOperation): TFileSourceConnection;
@@ -265,7 +279,7 @@ var
       begin
         if (aFileName = '.') or (aFileName = '..') then Continue;
 
-        aFile:= TSftpFileSource.CreateFile(srcPath, aFileName, @Attributes);
+        aFile:= TSftpFileSource.CreateFile(Connection, srcPath, aFileName, @Attributes);
 
         NewFiles.Add(aFile);
 
