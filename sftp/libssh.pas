@@ -94,6 +94,11 @@ const
   _LIBSSH2_SFTP_LSTAT                           = 1;
   _LIBSSH2_SFTP_SETSTAT                         = 2;
 
+  //* Flags for symlink_ex() */
+  _LIBSSH2_SFTP_SYMLINK                         = 0;
+  _LIBSSH2_SFTP_READLINK                        = 1;
+  _LIBSSH2_SFTP_REALPATH                        = 2;
+
   //* SFTP attribute flag bits */
   LIBSSH2_SFTP_ATTR_SIZE                        = $00000001;
   LIBSSH2_SFTP_ATTR_UIDGID                      = $00000002;
@@ -200,6 +205,7 @@ var
                                    longentry: PAnsiChar; longentry_maxlen: csize_t;
                                     attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; cdecl;
   libssh2_sftp_close_handle: function(handle: PLIBSSH2_SFTP_HANDLE): cint; cdecl;
+  libssh2_sftp_seek64: procedure(handle: PLIBSSH2_SFTP_HANDLE; offset: cuint64); cdecl;
   //* Miscellaneous Ops */
   libssh2_sftp_rename_ex: function(sftp: PLIBSSH2_SFTP;
                                    const source_filename: PAnsiChar;
@@ -225,6 +231,11 @@ var
                                  path_len: cuint;
                                  stat_type: cint;
                                  attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; cdecl;
+  libssh2_sftp_symlink_ex: function(sftp: PLIBSSH2_SFTP;
+                                    const path: PAnsiChar;
+                                    path_len: cuint;
+                                    target: PAnsiChar;
+                                    target_len: cuint; link_type: cint): cint; cdecl;
 
   //* Inline functions */
   function libssh2_session_init: PLIBSSH2_SESSION; inline;
@@ -241,6 +252,9 @@ var
   function libssh2_sftp_stat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; inline;
   function libssh2_sftp_lstat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; inline;
   function libssh2_sftp_setstat(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; attrs: PLIBSSH2_SFTP_ATTRIBUTES): cint; inline;
+  function libssh2_sftp_symlink(sftp: PLIBSSH2_SFTP; const orig: PAnsiChar; linkpath: PAnsiChar): cint; inline;
+  function libssh2_sftp_readlink(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; target: PAnsiChar; maxlen: cuint): cint; inline;
+  function libssh2_sftp_realpath(sftp: PLIBSSH2_SFTP; const path: PAnsiChar; target: PAnsiChar; maxlen: cuint): cint; inline;
 
 implementation
 
@@ -331,6 +345,24 @@ begin
   until Result <> LIBSSH2_ERROR_EAGAIN;
 end;
 
+function libssh2_sftp_symlink(sftp: PLIBSSH2_SFTP; const orig: PAnsiChar;
+  linkpath: PAnsiChar): cint;
+begin
+  Result:= libssh2_sftp_symlink_ex(sftp, orig, strlen(orig), linkpath, strlen(linkpath), _LIBSSH2_SFTP_SYMLINK);
+end;
+
+function libssh2_sftp_readlink(sftp: PLIBSSH2_SFTP; const path: PAnsiChar;
+  target: PAnsiChar; maxlen: cuint): cint;
+begin
+  Result:= libssh2_sftp_symlink_ex(sftp, path, strlen(path), target, maxlen, _LIBSSH2_SFTP_READLINK)
+end;
+
+function libssh2_sftp_realpath(sftp: PLIBSSH2_SFTP; const path: PAnsiChar;
+  target: PAnsiChar; maxlen: cuint): cint;
+begin
+  Result:= libssh2_sftp_symlink_ex(sftp, path, strlen(path), target, maxlen, _LIBSSH2_SFTP_REALPATH);
+end;
+
 var
   libssh2: TLibHandle = NilHandle;
 
@@ -364,6 +396,7 @@ begin
     libssh2_sftp_read:= SafeGetProcAddress(libssh2, 'libssh2_sftp_read');
     libssh2_sftp_readdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_readdir_ex');
     libssh2_sftp_close_handle:= SafeGetProcAddress(libssh2, 'libssh2_sftp_close_handle');
+    libssh2_sftp_seek64:= SafeGetProcAddress(libssh2, 'libssh2_sftp_seek64');
     //* Miscellaneous Ops */
     libssh2_sftp_rename_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rename_ex');
     libssh2_sftp_unlink_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_unlink_ex');
@@ -371,6 +404,7 @@ begin
     libssh2_sftp_mkdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_mkdir_ex');
     libssh2_sftp_rmdir_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_rmdir_ex');
     libssh2_sftp_stat_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_stat_ex');
+    libssh2_sftp_symlink_ex:= SafeGetProcAddress(libssh2, 'libssh2_sftp_symlink_ex');
 
     RegisterVirtualFileSource('Secure Shell', TSftpFileSource, False);
   except
