@@ -102,7 +102,7 @@ begin
 
         if (aFileName = '.') or (aFileName = '..') then Continue;
 
-        aFile:= TSftpFileSource.CreateFile(Path, aFileName, @Attributes);
+        aFile:= TSftpFileSource.CreateFile(FConnection, Path, aFileName, @Attributes);
 
         FFiles.Add(aFile);
       end;
