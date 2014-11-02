@@ -119,7 +119,7 @@ var
   FingerPrint: array [0..Pred(HOSTKEY_SIZE)] of AnsiChar;
 begin
   logWrite('Connecting to: ' + URI.Host, lmtInfo, True);
-  sock.Connect(PAnsiChar('192.168.56.102'),'22');
+  sock.Connect(PAnsiChar('192.168.1.39'),'22');
   if sock.LastError=0 then
     begin
     session := libssh2_session_init();
